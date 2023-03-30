@@ -2,9 +2,9 @@ export default function Hello() {
   return (
     <div className="container">
       <h1 className="text-center">James Guestbook</h1>
-      <div class="alert alert-light" role="alert">
+      {/* <div class="alert alert-light" role="alert">
         Share a memory or message for James to cherish when he becomes an adult!
-      </div>
+      </div> */}
 
       <form method="post">
         <div className="mb-3 w-75 ">
