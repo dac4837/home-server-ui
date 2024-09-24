@@ -15,6 +15,13 @@ function Upload() {
        </div> 
   )
 
+  const loadingAlert=( 
+    loading && 
+    <div className="alert alert-warning" role="alert">
+      uploading
+       </div> 
+  )
+
   const errorAlert= ( 
     errorMessage && 
     <div className="alert alert-danger" role="alert">
@@ -35,7 +42,7 @@ function Upload() {
   function handleSubmit(event) {
     setLoading(true)
     event.preventDefault()
-    const url = '/uploadFile';
+    const url = '/uploadfile';
     const formData = new FormData();
     formData.append('file', file);
     formData.append('fileName', file.name);
@@ -57,7 +64,7 @@ function Upload() {
   return (
     <div className="container">
       <h1 className="text-center">File upload</h1>
-      {loading && <div>uploading...</div>}
+      {loadingAlert}
       {successAlert}
       {errorAlert}
         <form onSubmit={handleSubmit}>
