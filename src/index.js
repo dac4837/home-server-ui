@@ -10,11 +10,13 @@ import {
 } from "react-router-dom";
 import Hello from "./pages/hello";
 import Home from "./pages/home";
+import Upload from "./pages/upload";
 
 const router = createBrowserRouter(
   createRoutesFromElements(
     <>
       <Route path="/hijames" element={<Hello />} />
+      <Route path="/upload" element={<Upload />} />
       <Route path="/" element={<Home />} />
     </>
   )
