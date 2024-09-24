@@ -6,6 +6,7 @@ function Upload() {
   const [file, setFile] = useState()
   const [successful, setSuccessful] = useState()
   const [errorMessage, setErrorMessage] = useState()
+  const [loading, setLoading] = useState(false)
 
   const successAlert=( 
     successful && 
@@ -32,6 +33,7 @@ function Upload() {
   }
   
   function handleSubmit(event) {
+    setLoading(true)
     event.preventDefault()
     const url = '/uploadFile';
     const formData = new FormData();
@@ -48,12 +50,14 @@ function Upload() {
     }).catch((error)=> {
         setErrorMessage("something went wrong")
     })
+    setLoading(false)
 
   }
 
   return (
     <div className="container">
       <h1 className="text-center">File upload</h1>
+      {loading && <div>uploading...</div>}
       {successAlert}
       {errorAlert}
         <form onSubmit={handleSubmit}>
