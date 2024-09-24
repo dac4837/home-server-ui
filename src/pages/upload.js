@@ -40,6 +40,7 @@ function Upload() {
   }
   
   function handleSubmit(event) {
+    clearMessages()
     setLoading(true)
     event.preventDefault()
     const url = '/uploadfile';
