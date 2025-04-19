@@ -11,12 +11,14 @@ import {
 import Hello from "./pages/hello";
 import Home from "./pages/home";
 import Upload from "./pages/upload";
+import Magic from "./pages/magic";
 
 const router = createBrowserRouter(
   createRoutesFromElements(
     <>
       <Route path="/hijames" element={<Hello />} />
       <Route path="/upload" element={<Upload />} />
+      <Route path="/magic" element={<Magic />} />
       <Route path="/" element={<Home />} />
     </>
   )
