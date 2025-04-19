@@ -8,11 +8,11 @@ export default function Magic() {
   const [errorMessage, setErrorMessage] = useState()
   const [isLoading, setIsLoading] = useState(false)
 
-  const successAlert=( 
-    deckJson && 
+  const successAlert = (
+    deckJson &&
     <div className="alert alert-success" role="alert">
       {getDownloadFileName()} generated successfully!
-       </div> 
+    </div>
   )
 
   const errorAlert = (
@@ -44,7 +44,7 @@ export default function Magic() {
       .catch(function (error) {
         clearMessages();
         setErrorMessage(error?.response?.data || "Error fetching data");
-      });   
+      });
 
   }
 
@@ -74,21 +74,21 @@ export default function Magic() {
       </div>
     </div>)
 
-    const deckDisplay = deckJson && (
-      <div className="container">
-      <button 
+  const deckDisplay = deckJson && (
+    <div className="container">
+      <button
         type="button"
         className="btn btn-primary me-2"
         onClick={() => {
-        const blob = new Blob([deckJson], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = getDownloadFileName();
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+          const blob = new Blob([deckJson], { type: "application/json" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = getDownloadFileName();
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
         }}
       >
         Download Deck JSON
@@ -100,8 +100,8 @@ export default function Magic() {
       >
         Copy to Clipboard
       </button>
-      </div>
-    )
+    </div>
+  )
 
 
   return (
