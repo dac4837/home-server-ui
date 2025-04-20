@@ -35,6 +35,7 @@ export default function Magic() {
   }
 
   const onSubmit = () => {
+    setDeckJson(null)
     setIsLoading(true)
     axios.get('/magic-json', { params: { deckUrl } })
       .then(function (response) {
