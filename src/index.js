@@ -9,9 +9,12 @@ import {
   Route,
 } from "react-router-dom";
 import Hello from "./pages/hello";
-import Home from "./pages/home";
 import Upload from "./pages/upload";
 import Magic from "./pages/magic";
+import Files from "./pages/files";
+import { MsalProvider } from "@azure/msal-react";
+import { getMsalInstance } from "./msalconfig";
+
 
 const router = createBrowserRouter(
   createRoutesFromElements(
@@ -19,7 +22,7 @@ const router = createBrowserRouter(
       <Route path="/hijames" element={<Hello />} />
       <Route path="/upload" element={<Upload />} />
       <Route path="/magic" element={<Magic />} />
-      <Route path="/" element={<Home />} />
+      <Route path="/files" element={<Files />} />
     </>
   )
 );
@@ -27,7 +30,10 @@ const router = createBrowserRouter(
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
   <React.StrictMode>
-    <RouterProvider router={router} />
+    <MsalProvider instance={getMsalInstance()}>
+      <RouterProvider router={router} />
+      </MsalProvider>
+
   </React.StrictMode>
 );
 
