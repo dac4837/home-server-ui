@@ -24,3 +24,7 @@ yarn-error.log*
 
 # front end
 /client
+
+.env
+.local-dev
+deck-response.json
