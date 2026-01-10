@@ -1,6 +1,87 @@
 // Helpers for updating Tabletop Simulator deck JSON structures
 const DEFAULT_BACK = 'https://i.imgur.com/Hg8CwwU.jpeg';
 
+export function processDeckData(rawDeck) {
+  try {
+    const deck = typeof rawDeck === 'string' ? JSON.parse(rawDeck) : rawDeck;
+    if (!deck.ObjectStates || !Array.isArray(deck.ObjectStates)) {
+      console.warn('processDeckData: invalid deck structure');
+      return [];
+    }
+
+    const piles = [];
+
+    deck.ObjectStates.forEach((pile, pileIdx) => {
+      if (!pile) return;
+
+      const pileCards = [];
+
+      // If pile has ContainedObjects (DeckCustom)
+      if (Array.isArray(pile.ContainedObjects)) {
+        pile.ContainedObjects.forEach((card, idx) => {
+          try {
+            const slot = Math.floor(card.CardID / 100);
+            const cardData = pile.CustomDeck && pile.CustomDeck[slot];
+            if (!cardData) return;
+
+            const frontLarge = cardData.FaceURL;
+            const frontSmall = frontLarge ? frontLarge.replace('large', 'small') : null;
+            const backLarge = cardData.BackURL && cardData.BackURL !== DEFAULT_BACK ? cardData.BackURL : null;
+            const backSmall = backLarge ? backLarge.replace('large', 'small') : null;
+
+            pileCards.push({
+              id: `${card.CardID}-${pileIdx}-${idx}`,
+              cardID: card.CardID,
+              nickname: card.Nickname,
+              frontSmall,
+              frontLarge,
+              backSmall,
+              backLarge
+            });
+          } catch (err) {
+            console.warn('processDeckData: skipping card', card, err);
+          }
+        });
+      } else if (pile.Name === 'Card' && pile.CardID) {
+        // Single card pile (e.g., commander represented as a Card object)
+        try {
+          const card = pile;
+          const slot = Math.floor(card.CardID / 100);
+          const cardData = pile.CustomDeck && pile.CustomDeck[slot];
+          if (cardData) {
+            const frontLarge = cardData.FaceURL;
+            const frontSmall = frontLarge ? frontLarge.replace('large', 'small') : null;
+            const backLarge = cardData.BackURL && cardData.BackURL !== DEFAULT_BACK ? cardData.BackURL : null;
+            const backSmall = backLarge ? backLarge.replace('large', 'small') : null;
+
+            pileCards.push({
+              id: `${card.CardID}-${pileIdx}-0`,
+              cardID: card.CardID,
+              nickname: card.Nickname,
+              frontSmall,
+              frontLarge,
+              backSmall,
+              backLarge
+            });
+          }
+        } catch (err) {
+          console.warn('processDeckData: skipping single-card pile', pile, err);
+        }
+      }
+
+      if (pileCards.length > 0) {
+        const title = pile.Nickname && pile.Nickname.length ? pile.Nickname : `Pile ${pileIdx + 1}`;
+        piles.push({ id: `pile-${pileIdx}`, title, cards: pileCards });
+      }
+    });
+
+    return piles;
+  } catch (err) {
+    console.error('processDeckData error', err);
+    return [];
+  }
+}
+
 export function computeNewCardId(deckObj) {
   const allDeckIDs = deckObj.ObjectStates.flatMap(p => p.DeckIDs || []);
   const maxDeckID = allDeckIDs.length ? Math.max(...allDeckIDs) : 0;
@@ -14,33 +95,37 @@ function ensureCustomDeckEntry(pile, slot, face, back) {
   pile.CustomDeck[String(slot)] = { FaceURL: face, BackURL: back && back.length ? back : DEFAULT_BACK, NumHeight: 1, NumWidth: 1, BackIsHidden: true };
 }
 
-export function addCardToPile(deckObj, pileIndex, name, frontUrl, backUrl) {
-  const { newCardID, newSlot } = computeNewCardId(deckObj);
+export function addCardToPile(deckObj, pileIndex, name, frontUrl, backUrl, quantity = 1) {
+  const allDeckIDs = deckObj.ObjectStates.flatMap(p => p.DeckIDs || []);
+  const maxDeckID = allDeckIDs.length ? Math.max(...allDeckIDs) : 0;
+  const baseSlot = Math.floor(maxDeckID / 100) + 1;
+  const baseCardID = baseSlot * 100;
+  const cardIDs = Array.from({ length: Math.max(1, quantity) }, (_, i) => baseCardID + i);
   const targetPile = deckObj.ObjectStates[pileIndex];
 
-  // Special-case: when adding to the Mainboard pile with a non-default back,
-  // add a card to Mainboard with the DEFAULT_BACK and also add a second
-  // card (both sides) to the "Double-sided Cards" pile (create if missing).
+  // Special-case: Mainboard with a custom back -> add quantity copies to Mainboard (default back)
+  // and a single double-sided card to the "Double-sided Cards" pile.
   if (targetPile && targetPile.Nickname === 'Mainboard' && backUrl && backUrl.length && backUrl !== DEFAULT_BACK) {
-    // 1) Add card to Mainboard using DEFAULT_BACK
+    // Insert copies into Mainboard
     if (Array.isArray(targetPile.ContainedObjects)) {
-      const newContained = { CardID: newCardID, Name: 'Card', Nickname: name, Transform: { posX: 0, posY: 1, posZ: 0, rotX: 0, rotY: 180, rotZ: 180, scaleX: 1, scaleY: 1, scaleZ: 1 } };
-      targetPile.ContainedObjects.unshift(newContained);
+      const newContained = cardIDs.map(cid => ({ CardID: cid, Name: 'Card', Nickname: name, Transform: { posX: 0, posY: 1, posZ: 0, rotX: 0, rotY: 180, rotZ: 180, scaleX: 1, scaleY: 1, scaleZ: 1 } }));
+      targetPile.ContainedObjects = [...newContained, ...targetPile.ContainedObjects];
       if (!Array.isArray(targetPile.DeckIDs)) targetPile.DeckIDs = [];
-      targetPile.DeckIDs.unshift(newCardID);
-      ensureCustomDeckEntry(targetPile, newSlot, frontUrl, DEFAULT_BACK);
-    } else if (targetPile.Name === 'Card') {
-      // convert single Card -> DeckCustom for Mainboard
+      targetPile.DeckIDs = [...cardIDs, ...targetPile.DeckIDs];
+      ensureCustomDeckEntry(targetPile, baseSlot, frontUrl, DEFAULT_BACK);
+    } else if (targetPile && targetPile.Name === 'Card') {
       const existingCardID = targetPile.CardID;
       const existingNickname = targetPile.Nickname;
       const existingCustomDeck = targetPile.CustomDeck || {};
       const customDeck = {};
       Object.keys(existingCustomDeck).forEach(k => { customDeck[k] = existingCustomDeck[k]; });
-      customDeck[String(newSlot)] = { FaceURL: frontUrl, BackURL: DEFAULT_BACK, NumHeight: 1, NumWidth: 1, BackIsHidden: true };
+      customDeck[String(baseSlot)] = { FaceURL: frontUrl, BackURL: DEFAULT_BACK, NumHeight: 1, NumWidth: 1, BackIsHidden: true };
+
       const containedObjects = [
         { CardID: existingCardID, Name: 'Card', Nickname: existingNickname, Transform: targetPile.Transform },
-        { CardID: newCardID, Name: 'Card', Nickname: name, Transform: { posX: 0, posY: 1, posZ: 0, rotX: 0, rotY: 180, rotZ: 180, scaleX: 1, scaleY: 1, scaleZ: 1 } }
+        ...cardIDs.map(cid => ({ CardID: cid, Name: 'Card', Nickname: name, Transform: { posX: 0, posY: 1, posZ: 0, rotX: 0, rotY: 180, rotZ: 180, scaleX: 1, scaleY: 1, scaleZ: 1 } }))
       ];
+
       const newPile = {
         Name: 'DeckCustom',
         Nickname: targetPile.Nickname || '',
@@ -51,25 +136,21 @@ export function addCardToPile(deckObj, pileIndex, name, frontUrl, backUrl) {
       };
       deckObj.ObjectStates.splice(pileIndex, 1, newPile);
     } else {
-      // create new DeckCustom for Mainboard
       const newPile = {
         Name: 'DeckCustom',
         Nickname: 'Mainboard',
-        ContainedObjects: [{ CardID: newCardID, Name: 'Card', Nickname: name, Transform: { posX: 0, posY: 1, posZ: 0, rotX: 0, rotY: 180, rotZ: 180, scaleX: 1, scaleY: 1, scaleZ: 1 } }],
-        DeckIDs: [newCardID],
-        CustomDeck: { [String(newSlot)]: { FaceURL: frontUrl, BackURL: DEFAULT_BACK, NumHeight: 1, NumWidth: 1, BackIsHidden: true } },
+        ContainedObjects: cardIDs.map(cid => ({ CardID: cid, Name: 'Card', Nickname: name, Transform: { posX: 0, posY: 1, posZ: 0, rotX: 0, rotY: 180, rotZ: 180, scaleX: 1, scaleY: 1, scaleZ: 1 } })),
+        DeckIDs: [...cardIDs],
+        CustomDeck: { [String(baseSlot)]: { FaceURL: frontUrl, BackURL: DEFAULT_BACK, NumHeight: 1, NumWidth: 1, BackIsHidden: true } },
         Transform: { posX: 0, posY: 1, posZ: 0, rotX: 0, rotY: 180, rotZ: 180, scaleX: 1, scaleY: 1, scaleZ: 1 }
       };
       deckObj.ObjectStates.splice(pileIndex + 1, 0, newPile);
     }
 
-    // 2) Add a second card (both sides) to the "Double-sided Cards" pile
-    // compute next available id/slot after the Mainboard insertion
+    // Add single double-sided card to "Double-sided Cards"
     const { newCardID: newCardID2, newSlot: newSlot2 } = computeNewCardId(deckObj);
-    // find existing Double-sided Cards pile by Nickname
     let doubleIdx = deckObj.ObjectStates.findIndex(p => p && p.Nickname === 'Double-sided Cards');
     if (doubleIdx === -1) {
-      // create new DeckCustom at end
       const created = {
         Name: 'DeckCustom',
         Nickname: 'Double-sided Cards',
@@ -119,35 +200,31 @@ export function addCardToPile(deckObj, pileIndex, name, frontUrl, backUrl) {
       }
     }
 
-    return { cardID: newCardID, slot: newSlot };
+    return { cardID: cardIDs[0], slot: baseSlot };
   }
 
-  // If pile is DeckCustom (has ContainedObjects), append the new card
+  // Non-Mainboard or default-back flow
   if (targetPile && Array.isArray(targetPile.ContainedObjects)) {
-    const newContained = { CardID: newCardID, Name: 'Card', Nickname: name, Transform: { posX: 0, posY: 1, posZ: 0, rotX: 0, rotY: 180, rotZ: 180, scaleX: 1, scaleY: 1, scaleZ: 1 } };
-    targetPile.ContainedObjects.unshift(newContained);
+    const newContained = cardIDs.map(cid => ({ CardID: cid, Name: 'Card', Nickname: name, Transform: { posX: 0, posY: 1, posZ: 0, rotX: 0, rotY: 180, rotZ: 180, scaleX: 1, scaleY: 1, scaleZ: 1 } }));
+    targetPile.ContainedObjects = [...newContained, ...targetPile.ContainedObjects];
     if (!Array.isArray(targetPile.DeckIDs)) targetPile.DeckIDs = [];
-    targetPile.DeckIDs.unshift(newCardID);
-    ensureCustomDeckEntry(targetPile, newSlot, frontUrl, backUrl);
-    return { cardID: newCardID, slot: newSlot };
+    targetPile.DeckIDs = [...cardIDs, ...targetPile.DeckIDs];
+    ensureCustomDeckEntry(targetPile, baseSlot, frontUrl, backUrl);
+    return { cardID: cardIDs[0], slot: baseSlot };
   }
 
-  // If pile is a single Card object, convert it to a DeckCustom that contains both the existing and new card
   if (targetPile && targetPile.Name === 'Card') {
     const existingCardID = targetPile.CardID;
     const existingNickname = targetPile.Nickname;
     const existingCustomDeck = targetPile.CustomDeck || {};
 
     const customDeck = {};
-    // copy existingCustomDeck entries
     Object.keys(existingCustomDeck).forEach(k => { customDeck[k] = existingCustomDeck[k]; });
-
-    // ensure new slot mapping
-    customDeck[String(newSlot)] = { FaceURL: frontUrl, BackURL: backUrl && backUrl.length ? backUrl : DEFAULT_BACK, NumHeight: 1, NumWidth: 1, BackIsHidden: true };
+    customDeck[String(baseSlot)] = { FaceURL: frontUrl, BackURL: backUrl && backUrl.length ? backUrl : DEFAULT_BACK, NumHeight: 1, NumWidth: 1, BackIsHidden: true };
 
     const containedObjects = [
       { CardID: existingCardID, Name: 'Card', Nickname: existingNickname, Transform: targetPile.Transform },
-      { CardID: newCardID, Name: 'Card', Nickname: name, Transform: { posX: 0, posY: 1, posZ: 0, rotX: 0, rotY: 180, rotZ: 180, scaleX: 1, scaleY: 1, scaleZ: 1 } }
+      ...cardIDs.map(cid => ({ CardID: cid, Name: 'Card', Nickname: name, Transform: { posX: 0, posY: 1, posZ: 0, rotX: 0, rotY: 180, rotZ: 180, scaleX: 1, scaleY: 1, scaleZ: 1 } }))
     ];
 
     const newPile = {
@@ -159,22 +236,20 @@ export function addCardToPile(deckObj, pileIndex, name, frontUrl, backUrl) {
       Transform: targetPile.Transform || { posX: 0, posY: 1, posZ: 0, rotX: 0, rotY: 180, rotZ: 180, scaleX: 1, scaleY: 1, scaleZ: 1 }
     };
 
-    // replace the single card pile with the new DeckCustom
     deckObj.ObjectStates.splice(pileIndex, 1, newPile);
-    return { cardID: newCardID, slot: newSlot };
+    return { cardID: cardIDs[0], slot: baseSlot };
   }
 
-  // If pile not found or unknown type, append a new DeckCustom after pileIndex
   const newPile = {
     Name: 'DeckCustom',
     Nickname: '',
-    ContainedObjects: [{ CardID: newCardID, Name: 'Card', Nickname: name, Transform: { posX: 0, posY: 1, posZ: 0, rotX: 0, rotY: 180, rotZ: 180, scaleX: 1, scaleY: 1, scaleZ: 1 } }],
-    DeckIDs: [newCardID],
-    CustomDeck: { [String(newSlot)]: { FaceURL: frontUrl, BackURL: backUrl && backUrl.length ? backUrl : DEFAULT_BACK, NumHeight: 1, NumWidth: 1, BackIsHidden: true } },
+    ContainedObjects: cardIDs.map(cid => ({ CardID: cid, Name: 'Card', Nickname: name, Transform: { posX: 0, posY: 1, posZ: 0, rotX: 0, rotY: 180, rotZ: 180, scaleX: 1, scaleY: 1, scaleZ: 1 } })),
+    DeckIDs: [...cardIDs],
+    CustomDeck: { [String(baseSlot)]: { FaceURL: frontUrl, BackURL: backUrl && backUrl.length ? backUrl : DEFAULT_BACK, NumHeight: 1, NumWidth: 1, BackIsHidden: true } },
     Transform: { posX: 0, posY: 1, posZ: 0, rotX: 0, rotY: 180, rotZ: 180, scaleX: 1, scaleY: 1, scaleZ: 1 }
   };
   deckObj.ObjectStates.splice(pileIndex + 1, 0, newPile);
-  return { cardID: newCardID, slot: newSlot };
+  return { cardID: cardIDs[0], slot: baseSlot };
 }
 
 export function moveCardBetweenPiles(deckObj, origPileIndex, newPileIndex, cardId, name, frontUrl, backUrl) {

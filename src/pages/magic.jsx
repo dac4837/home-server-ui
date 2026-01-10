@@ -1,12 +1,6 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
-import { addCardToPile, moveCardBetweenPiles, updateCardInPlace, removeCardFromPile } from "../utils/deckUpdate";
-
-// TODO make sure the cards are put in the 
-// TODO double face cards are added correctly (2 piles )
-// non-scryfall images
- // Add multiple at once
-
+import { addCardToPile, moveCardBetweenPiles, updateCardInPlace, removeCardFromPile, processDeckData } from "../utils/deckUtils";
 
 export default function Magic() {
 
@@ -15,14 +9,12 @@ export default function Magic() {
   const [editingCard, setEditingCard] = useState(null)
   const [processedDeck, setProcessedDeck] = useState([])
   const [showAddForm, setShowAddForm] = useState(false)
-  const [addForm, setAddForm] = useState({ name: '', frontUrl: '', backUrl: '', pileId: '' })
+  const [addForm, setAddForm] = useState({ name: '', frontUrl: '', backUrl: '', pileId: '', quantity: 1 })
   const [infoMessage, setInfoMessage] = useState()
   const [successMessage, setSuccessMessage] = useState()
   const [errorMessage, setErrorMessage] = useState()
   const [isLoading, setIsLoading] = useState(false)
-
-  // deck update helpers moved to `src/utils/deckUpdate.js`
-
+  
   const downloadDeckJson = (jsonStr) => {
     const blob = new Blob([jsonStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -40,7 +32,6 @@ export default function Magic() {
       <div className="alert alert-success" role="alert">{successMessage}</div>
     )
   )
-
   const errorAlert = (
     errorMessage && (
       <div className="alert alert-danger" role="alert">Error: {errorMessage}</div>
@@ -97,11 +88,12 @@ export default function Magic() {
       setIsLoading(false);
     }
   }
+
   function handleFormSubmit(e) {
     e.preventDefault();
     clearMessages();
     if (!deckJson) return setErrorMessage('No deck loaded to modify');
-    const { name, frontUrl, backUrl, pileId } = addForm;
+    const { name, frontUrl, backUrl, pileId, quantity } = addForm;
     if (!name || !frontUrl || !pileId) return setErrorMessage('Name, front image and pile selection are required');
 
     try {
@@ -128,13 +120,13 @@ export default function Magic() {
         setSuccessMessage(`Updated "${name}" in ${pileTitle}`);
         setEditingCard(null);
         setShowAddForm(false);
-        setAddForm({ name: '', frontUrl: '', backUrl: '', pileId: '' });
+        setAddForm({ name: '', frontUrl: '', backUrl: '', pileId: '', quantity: 1 });
         return;
       }
 
       // Add new card
       const pileIndex = parseInt(pileId.split('-')[1], 10);
-      addCardToPile(deckObj, pileIndex, name, frontUrl, backUrl);
+      addCardToPile(deckObj, pileIndex, name, frontUrl, backUrl, quantity || 1);
       const updatedJson = JSON.stringify(deckObj);
       setDeckJson(updatedJson);
       const processed = processDeckData(deckObj);
@@ -143,94 +135,13 @@ export default function Magic() {
       setSuccessMessage(`Added "${name}" to ${pileTitle}`);
       setErrorMessage(null);
       setShowAddForm(false);
-      setAddForm({ name: '', frontUrl: '', backUrl: '', pileId: '' });
+      setAddForm({ name: '', frontUrl: '', backUrl: '', pileId: '', quantity: 1 });
     } catch (err) {
       console.error('Error modifying deck', err);
       setErrorMessage('Failed to modify deck');
     }
   }
-  function processDeckData(rawDeck) {
-    try {
-      const deck = typeof rawDeck === 'string' ? JSON.parse(rawDeck) : rawDeck;
-      if (!deck.ObjectStates || !Array.isArray(deck.ObjectStates)) {
-        console.warn('processDeckData: invalid deck structure');
-        return [];
-      }
-
-      const defaultBack = "https://i.imgur.com/Hg8CwwU.jpeg";
-      const piles = [];
-
-      deck.ObjectStates.forEach((pile, pileIdx) => {
-        if (!pile) return;
-
-        const pileCards = [];
-
-        // If pile has ContainedObjects (DeckCustom)
-        if (Array.isArray(pile.ContainedObjects)) {
-          pile.ContainedObjects.forEach((card, idx) => {
-            try {
-              const slot = Math.floor(card.CardID / 100);
-              const cardData = pile.CustomDeck && pile.CustomDeck[slot];
-              if (!cardData) return;
-
-              const frontLarge = cardData.FaceURL;
-              const frontSmall = frontLarge ? frontLarge.replace('large', 'small') : null;
-              const backLarge = cardData.BackURL && cardData.BackURL !== defaultBack ? cardData.BackURL : null;
-              const backSmall = backLarge ? backLarge.replace('large', 'small') : null;
-
-              pileCards.push({
-                id: `${card.CardID}-${pileIdx}-${idx}`,
-                cardID: card.CardID,
-                nickname: card.Nickname,
-                frontSmall,
-                frontLarge,
-                backSmall,
-                backLarge
-              });
-            } catch (err) {
-              console.warn('processDeckData: skipping card', card, err);
-            }
-          });
-        } else if (pile.Name === 'Card' && pile.CardID) {
-          // Single card pile (e.g., commander represented as a Card object)
-          try {
-            const card = pile;
-            const slot = Math.floor(card.CardID / 100);
-            const cardData = pile.CustomDeck && pile.CustomDeck[slot];
-            if (cardData) {
-              const frontLarge = cardData.FaceURL;
-              const frontSmall = frontLarge ? frontLarge.replace('large', 'small') : null;
-              const backLarge = cardData.BackURL && cardData.BackURL !== defaultBack ? cardData.BackURL : null;
-              const backSmall = backLarge ? backLarge.replace('large', 'small') : null;
-
-              pileCards.push({
-                id: `${card.CardID}-${pileIdx}-0`,
-                cardID: card.CardID,
-                nickname: card.Nickname,
-                frontSmall,
-                frontLarge,
-                backSmall,
-                backLarge
-              });
-            }
-          } catch (err) {
-            console.warn('processDeckData: skipping single-card pile', pile, err);
-          }
-        }
-
-        if (pileCards.length > 0) {
-          const title = pile.Nickname && pile.Nickname.length ? pile.Nickname : `Pile ${pileIdx + 1}`;
-          piles.push({ id: `pile-${pileIdx}`, title, cards: pileCards });
-        }
-      });
-
-      return piles;
-    } catch (err) {
-      console.error('processDeckData error', err);
-      return [];
-    }
-  }
-
+  
   // Lazy React tooltip image - only loads large image when hovered
   function LazyTooltipImage({ smallSrc, largeSrc, alt }) {
     const [show, setShow] = useState(false);
@@ -325,6 +236,22 @@ export default function Magic() {
   function handleAddFormChange(field, value) {
     setAddForm(prev => ({ ...prev, [field]: value }))
   }
+  function handleToggleAddForm() {
+    // Clear messages
+    setInfoMessage(null);
+    setErrorMessage(null);
+    // If the form is closed, open it and reset to Add mode.
+    if (!showAddForm) {
+      setEditingCard(null);
+      setAddForm({ name: '', frontUrl: '', backUrl: '', pileId: processedDeck.length ? processedDeck[0].id : '', quantity: 1 });
+      setShowAddForm(true);
+      return;
+    }
+
+    // If the form is already open, switch to Add mode without closing it.
+    setEditingCard(null);
+    setAddForm({ name: '', frontUrl: '', backUrl: '', pileId: processedDeck.length ? processedDeck[0].id : '', quantity: 1 });
+  }
   function handleEditCard(pileId, card) {
     // populate form and enter edit mode
     setAddForm({ name: card.nickname || '', frontUrl: card.frontLarge || '', backUrl: card.backLarge || '', pileId });
@@ -360,15 +287,7 @@ export default function Magic() {
       <div style={{ display: 'flex', gap: '1rem' }}>
         <div style={{ flex: 1 }}>
               <div style={{ marginBottom: '0.5rem' }}>
-                <button className="btn btn-secondary" onClick={() => {
-                  setShowAddForm(s => !s);
-                  setInfoMessage(null);
-                  setErrorMessage(null);
-                  // default pile selection to first available pile
-                  if (processedDeck.length && !addForm.pileId) {
-                    setAddForm(prev => ({ ...prev, pileId: processedDeck[0].id }));
-                  }
-                }}>Add Card</button>
+                <button className="btn btn-secondary" onClick={handleToggleAddForm}>Add Card</button>
               </div>
 
               {processedDeck.map((pile) => (
@@ -386,7 +305,7 @@ export default function Magic() {
         <div style={{ width: 360, alignSelf: 'flex-start', position: 'sticky', top: '1rem', height: 'fit-content' }}>
           <div style={{ marginBottom: '0.5rem' }}>
             {showAddForm ? (
-              <button className="btn btn-secondary" onClick={() => setShowAddForm(false)}>Close</button>
+              <button className="btn btn-secondary" onClick={() => { setShowAddForm(false); setEditingCard(null); setAddForm({ name: '', frontUrl: '', backUrl: '', pileId: '', quantity: 1 }); }}>Close</button>
             ) : null}
           </div>
 
@@ -406,7 +325,16 @@ export default function Magic() {
               <div className="mb-2">
                 <label className="form-label">Back image URL (optional)</label>
                 <input className="form-control" value={addForm.backUrl} onChange={e => handleAddFormChange('backUrl', e.target.value)} />
+                {addForm.pileId && processedDeck.find(p => p.id === addForm.pileId)?.title === 'Mainboard' && addForm.backUrl && addForm.backUrl.trim() !== '' && (
+                  <div className="form-text text-warning">Double sided version will be added to "Double-sided Cards" as well</div>
+                )}
               </div>
+              {!editingCard && (
+                <div className="mb-2">
+                  <label className="form-label">Quantity</label>
+                  <input type="number" min="1" className="form-control" value={addForm.quantity} onChange={e => handleAddFormChange('quantity', Number(e.target.value || 1))} />
+                </div>
+              )}
               <div className="mb-2">
                 <label className="form-label">Pile</label>
                 <select className="form-select" value={addForm.pileId} onChange={e => handleAddFormChange('pileId', e.target.value)}>
@@ -416,7 +344,7 @@ export default function Magic() {
               </div>
               <div className="d-grid">
                 <button type="submit" className="btn btn-primary">{editingCard ? 'Save Changes' : 'Add Card'}</button>
-                {editingCard && <button type="button" className="btn btn-secondary mt-2" onClick={() => { setEditingCard(null); setAddForm({ name: '', frontUrl: '', backUrl: '', pileId: '' }); setShowAddForm(false); }}>Cancel</button>}
+                {editingCard && <button type="button" className="btn btn-secondary mt-2" onClick={() => { setEditingCard(null); setAddForm({ name: '', frontUrl: '', backUrl: '', pileId: '', quantity: 1 }); setShowAddForm(false); }}>Cancel</button>}
               </div>
             </form>
           )}
