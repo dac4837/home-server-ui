@@ -73,7 +73,7 @@ export default function Magic() {
         const res = await fetch('/deck-response.json');
         data = await res.json();
       } else {
-        const res = await axios.post('/magic-json', { url: deckUrl });
+        const res = await axios.get('/magic-json', { params: { deckUrl } });
         data = res.data;
       }
       const jsonStr = typeof data === 'string' ? data : JSON.stringify(data);
