@@ -71,7 +71,7 @@ export function processDeckData(rawDeck) {
       }
 
       if (pileCards.length > 0) {
-        const title = pile.Nickname && pile.Nickname.length ? pile.Nickname : `Pile ${pileIdx + 1}`;
+        const title = (pile.Description && pile.Description.length) ? pile.Description : (pile.Nickname && pile.Nickname.length ? pile.Nickname : `Pile ${pileIdx + 1}`);
         piles.push({ id: `pile-${pileIdx}`, title, cards: pileCards });
       }
     });
@@ -106,7 +106,7 @@ export function addCardToPile(deckObj, pileIndex, name, frontUrl, backUrl, quant
 
   // Special-case: Mainboard with a custom back -> add quantity copies to Mainboard (default back)
   // and a single double-sided card to the "Double-sided Cards" pile.
-  if (targetPile && targetPile.Nickname === 'Mainboard' && backUrl && backUrl.length && backUrl !== DEFAULT_BACK) {
+  if (targetPile && ((targetPile.Description === 'Mainboard') || (targetPile.Nickname === 'Mainboard')) && backUrl && backUrl.length && backUrl !== DEFAULT_BACK) {
     // Insert copies into Mainboard
     if (Array.isArray(targetPile.ContainedObjects)) {
       const newContained = cardIDs.map(cid => ({ CardID: cid, Name: 'Card', Nickname: name, Transform: DEFAULT_TRANSFORM }));
@@ -129,6 +129,7 @@ export function addCardToPile(deckObj, pileIndex, name, frontUrl, backUrl, quant
       const newPile = {
         Name: 'DeckCustom',
         Nickname: targetPile.Nickname || '',
+        Description: targetPile.Description || targetPile.Nickname || '',
         ContainedObjects: containedObjects,
         DeckIDs: containedObjects.map(c => c.CardID),
         CustomDeck: customDeck,
@@ -139,6 +140,7 @@ export function addCardToPile(deckObj, pileIndex, name, frontUrl, backUrl, quant
       const newPile = {
         Name: 'DeckCustom',
         Nickname: 'Mainboard',
+        Description: 'Mainboard',
         ContainedObjects: cardIDs.map(cid => ({ CardID: cid, Name: 'Card', Nickname: name, Transform: DEFAULT_TRANSFORM })),
         DeckIDs: [...cardIDs],
         CustomDeck: { [String(baseSlot)]: { FaceURL: frontUrl, BackURL: DEFAULT_BACK, NumHeight: 1, NumWidth: 1, BackIsHidden: true } },
@@ -149,11 +151,12 @@ export function addCardToPile(deckObj, pileIndex, name, frontUrl, backUrl, quant
 
     // Add single double-sided card to "Double-sided Cards"
     const { newCardID: newCardID2, newSlot: newSlot2 } = computeNewCardId(deckObj);
-    let doubleIdx = deckObj.ObjectStates.findIndex(p => p && p.Nickname === 'Double-sided Cards');
+    let doubleIdx = deckObj.ObjectStates.findIndex(p => p && ((p.Description === 'Double-sided Cards') || (p.Nickname === 'Double-sided Cards')));
     if (doubleIdx === -1) {
       const created = {
         Name: 'DeckCustom',
         Nickname: 'Double-sided Cards',
+        Description: 'Double-sided Cards',
         ContainedObjects: [{ CardID: newCardID2, Name: 'Card', Nickname: name, Transform: DEFAULT_TRANSFORM }],
         DeckIDs: [newCardID2],
         CustomDeck: { [String(newSlot2)]: { FaceURL: frontUrl, BackURL: backUrl && backUrl.length ? backUrl : DEFAULT_BACK, NumHeight: 1, NumWidth: 1, BackIsHidden: true } },
@@ -180,6 +183,7 @@ export function addCardToPile(deckObj, pileIndex, name, frontUrl, backUrl, quant
         const replaced = {
           Name: 'DeckCustom',
           Nickname: doublePile.Nickname || '',
+          Description: doublePile.Description || doublePile.Nickname || '',
           ContainedObjects: containedObjects,
           DeckIDs: containedObjects.map(c => c.CardID),
           CustomDeck: customDeck,
@@ -190,6 +194,7 @@ export function addCardToPile(deckObj, pileIndex, name, frontUrl, backUrl, quant
         const created = {
           Name: 'DeckCustom',
           Nickname: 'Double-sided Cards',
+          Description: 'Double-sided Cards',
           ContainedObjects: [{ CardID: newCardID2, Name: 'Card', Nickname: name, Transform: DEFAULT_TRANSFORM }],
           DeckIDs: [newCardID2],
           CustomDeck: { [String(newSlot2)]: { FaceURL: frontUrl, BackURL: backUrl && backUrl.length ? backUrl : DEFAULT_BACK, NumHeight: 1, NumWidth: 1, BackIsHidden: true } },
@@ -227,6 +232,7 @@ export function addCardToPile(deckObj, pileIndex, name, frontUrl, backUrl, quant
     const newPile = {
       Name: 'DeckCustom',
       Nickname: targetPile.Nickname || '',
+      Description: targetPile.Description || targetPile.Nickname || '',
       ContainedObjects: containedObjects,
       DeckIDs: containedObjects.map(c => c.CardID),
       CustomDeck: customDeck,
@@ -240,6 +246,7 @@ export function addCardToPile(deckObj, pileIndex, name, frontUrl, backUrl, quant
   const newPile = {
     Name: 'DeckCustom',
     Nickname: '',
+    Description: '',
     ContainedObjects: cardIDs.map(cid => ({ CardID: cid, Name: 'Card', Nickname: name, Transform: DEFAULT_TRANSFORM })),
     DeckIDs: [...cardIDs],
     CustomDeck: { [String(baseSlot)]: { FaceURL: frontUrl, BackURL: backUrl && backUrl.length ? backUrl : DEFAULT_BACK, NumHeight: 1, NumWidth: 1, BackIsHidden: true } },
@@ -294,6 +301,7 @@ export function moveCardBetweenPiles(deckObj, origPileIndex, newPileIndex, cardI
     const replaced = {
       Name: 'DeckCustom',
       Nickname: newPile.Nickname || '',
+      Description: newPile.Description || newPile.Nickname || '',
       ContainedObjects: containedObjects,
       DeckIDs: containedObjects.map(c => c.CardID),
       CustomDeck: customDeck,
@@ -308,6 +316,7 @@ export function moveCardBetweenPiles(deckObj, origPileIndex, newPileIndex, cardI
   const created = {
     Name: 'DeckCustom',
     Nickname: '',
+    Description: '',
     ContainedObjects: [{ CardID: cardId, Name: 'Card', Nickname: name, Transform: DEFAULT_TRANSFORM }],
     DeckIDs: [cardId],
     CustomDeck: { [String(Math.floor(cardId / 100))]: { FaceURL: frontUrl, BackURL: backUrl && backUrl.length ? backUrl : DEFAULT_BACK, NumHeight: 1, NumWidth: 1, BackIsHidden: true } },
@@ -351,6 +360,7 @@ export function removeCardFromPile(deckObj, pileIndex, cardId) {
         CustomDeck: customDeck,
         CardID: remaining.CardID,
         Nickname: remaining.Nickname,
+        Description: targetPile.Description || targetPile.Nickname || '',
         Transform: targetPile.Transform
       };
       deckObj.ObjectStates.splice(pileIndex, 1, single);

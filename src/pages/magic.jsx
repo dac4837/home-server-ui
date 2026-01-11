@@ -6,6 +6,7 @@ export default function Magic() {
 
   const [deckUrl, setDeckUrl] = useState("")
   const [deckJson, setDeckJson] = useState()
+  const [uploadedFileName, setUploadedFileName] = useState(null)
   const [editingCard, setEditingCard] = useState(null)
   const [processedDeck, setProcessedDeck] = useState([])
   const [showAddForm, setShowAddForm] = useState(false)
@@ -51,12 +52,20 @@ export default function Magic() {
 
   const getDownloadFileName = () => {
     try {
-      if (!deckUrl) return 'deck.json';
+      const ts = Date.now();
+      // If user uploaded a file, base on that name
+      if (uploadedFileName) {
+        const base = uploadedFileName.split('/').pop().replace(/\.[^/.]+$/, '');
+        return `${base}-${ts}.json`;
+      }
+      if (!deckUrl) return `deck-${ts}.json`;
       const u = new URL(deckUrl);
-      const path = u.pathname.split('/').pop();
-      return path ? path.replace(/\.[a-z]+$/i, '') + '.json' : 'deck.json';
+      const parts = u.pathname.split('/').filter(Boolean);
+      const slug = parts.length ? parts[parts.length - 1] : 'deck';
+      return `${slug}-${ts}.json`;
+
     } catch (err) {
-      return 'deck.json';
+      return `deck-${Date.now()}.json`;
     }
   }
 
@@ -87,6 +96,31 @@ export default function Magic() {
     } finally {
       setIsLoading(false);
     }
+  }
+
+  // Handle uploading a previously generated deck JSON file
+  function handleFileUpload(e) {
+    clearMessages();
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    setUploadedFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const text = ev.target.result;
+        const parsed = typeof text === 'string' ? JSON.parse(text) : text;
+        const jsonStr = typeof parsed === 'string' ? parsed : JSON.stringify(parsed);
+        setDeckJson(jsonStr);
+        const processed = processDeckData(parsed);
+        setProcessedDeck(processed);
+        setSuccessMessage(`Loaded deck from ${file.name}`);
+        setIsLoading(false);
+      } catch (err) {
+        console.error('file parse error', err);
+        setErrorMessage('Failed to parse uploaded JSON');
+      }
+    };
+    reader.readAsText(file);
   }
 
   function handleFormSubmit(e) {
@@ -371,9 +405,15 @@ export default function Magic() {
             required
           />
         </div>
-        <button type="button" className="btn btn-primary" onClick={onSubmit}>
-          Submit
-        </button>
+        <div style={{ marginBottom: '0.75rem' }}>
+          <button type="button" className="btn btn-primary" onClick={onSubmit}>
+            Submit
+          </button>
+        </div>
+        <div className="mb-3 w-75">
+          <label htmlFor="deckFile" className="form-label">Or upload deck JSON</label>
+          <input type="file" accept="application/json" className="form-control" id="deckFile" onChange={handleFileUpload} />
+        </div>
       </form>
       {loadingSpinner}
       {successAlert}
