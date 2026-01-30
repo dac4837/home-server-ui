@@ -10,73 +10,75 @@ export function processDeckData(rawDeck) {
       return [];
     }
 
-    const piles = [];
+    // Fixed pile buckets
+    const buckets = {
+      mainboard: { id: 'pile-mainboard', title: 'Mainboard', cards: [] },
+      commander: { id: 'pile-commander', title: 'Commander', cards: [] },
+      tokens: { id: 'pile-tokens', title: 'Tokens', cards: [] },
+      double: { id: 'pile-double', title: 'Double-sided Cards', cards: [] }
+    };
+
+    // helper to push card into a bucket
+    function pushCard(bucketKey, cardObj, pileIdx, idx) {
+      const entry = {
+        id: `${cardObj.CardID}-${pileIdx}-${idx}`,
+        cardID: cardObj.CardID,
+        nickname: cardObj.Nickname,
+        frontSmall: null,
+        frontLarge: null,
+        backSmall: null,
+        backLarge: null
+      };
+      const slot = Math.floor(cardObj.CardID / 100);
+      const cardData = (cardObj.__customDeckOwner && cardObj.__customDeckOwner.CustomDeck && cardObj.__customDeckOwner.CustomDeck[slot]) || null;
+      if (cardData) {
+        const frontLarge = cardData.FaceURL;
+        const frontSmall = frontLarge ? frontLarge.replace('large', 'small') : null;
+        const backLarge = cardData.BackURL && cardData.BackURL !== DEFAULT_BACK ? cardData.BackURL : null;
+        const backSmall = backLarge ? backLarge.replace('large', 'small') : null;
+        entry.frontLarge = frontLarge;
+        entry.frontSmall = frontSmall;
+        entry.backLarge = backLarge;
+        entry.backSmall = backSmall;
+      }
+      buckets[bucketKey].cards.push(entry);
+    }
 
     deck.ObjectStates.forEach((pile, pileIdx) => {
       if (!pile) return;
 
-      const pileCards = [];
+      // Determine bucket by Description/Nickname heuristics
+      const title = (pile.Description || pile.Nickname || '').toLowerCase();
+      let bucket = 'mainboard';
+      if (title.includes('commander')) bucket = 'commander';
+      else if (title.includes('token')) bucket = 'tokens';
+      else if (title.includes('double')) bucket = 'double';
 
       // If pile has ContainedObjects (DeckCustom)
       if (Array.isArray(pile.ContainedObjects)) {
         pile.ContainedObjects.forEach((card, idx) => {
+          // attach a back-reference so we can find CustomDeck entries
+          card.__customDeckOwner = pile;
           try {
-            const slot = Math.floor(card.CardID / 100);
-            const cardData = pile.CustomDeck && pile.CustomDeck[slot];
-            if (!cardData) return;
-
-            const frontLarge = cardData.FaceURL;
-            const frontSmall = frontLarge ? frontLarge.replace('large', 'small') : null;
-            const backLarge = cardData.BackURL && cardData.BackURL !== DEFAULT_BACK ? cardData.BackURL : null;
-            const backSmall = backLarge ? backLarge.replace('large', 'small') : null;
-
-            pileCards.push({
-              id: `${card.CardID}-${pileIdx}-${idx}`,
-              cardID: card.CardID,
-              nickname: card.Nickname,
-              frontSmall,
-              frontLarge,
-              backSmall,
-              backLarge
-            });
+            pushCard(bucket, card, pileIdx, idx);
           } catch (err) {
             console.warn('processDeckData: skipping card', card, err);
           }
         });
       } else if (pile.Name === 'Card' && pile.CardID) {
-        // Single card pile (e.g., commander represented as a Card object)
+        const card = pile;
+        card.__customDeckOwner = pile;
         try {
-          const card = pile;
-          const slot = Math.floor(card.CardID / 100);
-          const cardData = pile.CustomDeck && pile.CustomDeck[slot];
-          if (cardData) {
-            const frontLarge = cardData.FaceURL;
-            const frontSmall = frontLarge ? frontLarge.replace('large', 'small') : null;
-            const backLarge = cardData.BackURL && cardData.BackURL !== DEFAULT_BACK ? cardData.BackURL : null;
-            const backSmall = backLarge ? backLarge.replace('large', 'small') : null;
-
-            pileCards.push({
-              id: `${card.CardID}-${pileIdx}-0`,
-              cardID: card.CardID,
-              nickname: card.Nickname,
-              frontSmall,
-              frontLarge,
-              backSmall,
-              backLarge
-            });
-          }
+          pushCard(bucket, card, pileIdx, 0);
         } catch (err) {
           console.warn('processDeckData: skipping single-card pile', pile, err);
         }
       }
-
-      if (pileCards.length > 0) {
-        const title = (pile.Description && pile.Description.length) ? pile.Description : (pile.Nickname && pile.Nickname.length ? pile.Nickname : `Pile ${pileIdx + 1}`);
-        piles.push({ id: `pile-${pileIdx}`, title, cards: pileCards });
-      }
     });
 
-    return piles;
+    // Return piles only if they have cards, in desired order
+    const order = ['mainboard', 'commander', 'tokens', 'double'];
+    return order.map(k => buckets[k]).filter(b => b.cards && b.cards.length > 0);
   } catch (err) {
     console.error('processDeckData error', err);
     return [];
