@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
-import { addCardToPile, moveCardBetweenPiles, updateCardInPlace, removeCardFromPile, processDeckData } from "../utils/deckUtils";
+import { addCardToPile, moveCardBetweenPiles, updateCardInPlace, removeCardFromPile, processDeckData, convertToTableTop } from "../utils/deckUtils";
 
 export default function Magic() {
 
@@ -76,7 +76,7 @@ export default function Magic() {
     )
   }
 
-  // Photo upload form: sends 1-3 images to backend /magic-json-from-photo
+  // Photo upload form: sends 1-3 images to backend /magic-deck-json-from-photo
   function PhotoUploadForm() {
     const [photos, setPhotos] = useState([]);
 
@@ -99,7 +99,7 @@ export default function Magic() {
         const formData = new FormData();
         photos.forEach((f) => formData.append('photo', f));
 
-        const res = await axios.post('/magic-json-from-photo', formData, {
+        const res = await axios.post('/magic-deck-json-from-photo', formData, {
           headers: { 'Content-Type': 'multipart/form-data' }
         });
 
@@ -221,17 +221,19 @@ export default function Magic() {
     }
     setIsLoading(true);
     try {
-      let data;
+      let cardData;
       if (process.env.REACT_APP_LOCAL_MODE) {
         const res = await fetch('/deck-response.json');
-        data = await res.json();
+        cardData = await res.json();
       } else {
-        const res = await axios.get('/magic-json', { params: { deckUrl } });
-        data = res.data;
+        const res = await axios.get('/magic-cards-json', { params: { deckUrl } });
+        cardData = res.data;
       }
-      const jsonStr = typeof data === 'string' ? data : JSON.stringify(data);
+      // Convert card data to TableTop format
+      const deckObj = convertToTableTop(cardData);
+      const jsonStr = JSON.stringify(deckObj);
       setDeckJson(jsonStr);
-      const processed = processDeckData(data);
+      const processed = processDeckData(deckObj);
       setProcessedDeck(processed);
       setSuccessMessage('Deck loaded');
     } catch (err) {
