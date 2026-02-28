@@ -4,13 +4,15 @@ import { addCardToPile, moveCardBetweenPiles, updateCardInPlace, removeCardFromP
 
 export default function Magic() {
 
-  const FOREST_URL = 'https://cards.scryfall.io/png/front/e/d/ed22c591-19f4-4096-a08c-5523a26b307c.png?1738799053'
-  const PLAINS_URL = 'https://cards.scryfall.io/png/front/5/d/5d918248-85ff-4fea-ac91-aa5466dd2829.png?1681845990'
-  const SWAMP_URL = 'https://cards.scryfall.io/png/front/a/2/a22f49c5-1dcd-453c-b169-0b2519c44d0c.png?1695483859'
-  const MOUNTAIN_URL = 'https://cards.scryfall.io/png/front/8/a/8a05eb4e-dbea-4d41-939f-b9d92b56f56a.png?1605219735'
-  const ISLAND_URL = 'https://cards.scryfall.io/png/front/9/3/93b0918a-398a-4c6d-a5a9-e35a999b24ae.png?1594958716'
-  const WASTES_URL = 'https://cards.scryfall.io/png/front/7/0/7019912c-bd9b-4b96-9388-400794909aa1.png?1562917413'
-
+  const BASIC_LANDS = {
+    forest: 'https://cards.scryfall.io/png/front/e/d/ed22c591-19f4-4096-a08c-5523a26b307c.png?1738799053',
+    plains: 'https://cards.scryfall.io/png/front/5/d/5d918248-85ff-4fea-ac91-aa5466dd2829.png?1681845990',
+    swamp: 'https://cards.scryfall.io/png/front/a/2/a22f49c5-1dcd-453c-b169-0b2519c44d0c.png?1695483859',
+    mountain: 'https://cards.scryfall.io/png/front/8/a/8a05eb4e-dbea-4d41-939f-b9d92b56f56a.png?1605219735',
+    island: 'https://cards.scryfall.io/png/front/9/3/93b0918a-398a-4c6d-a5a9-e35a999b24ae.png?1594958716',
+    wastes: 'https://cards.scryfall.io/png/front/7/0/7019912c-bd9b-4b96-9388-400794909aa1.png?1562917413'
+  };
+  
   const LAND_ICON_STYLE = { width: 26, height: 26, cursor: 'pointer' }
 
   const [deckUrl, setDeckUrl] = useState("")
@@ -18,12 +20,37 @@ export default function Magic() {
   const [deckJson, setDeckJson] = useState()
   const [uploadedFileName, setUploadedFileName] = useState(null)
   const [editingCard, setEditingCard] = useState(null)
+  const [processingArtOptions, setProcessingArtOptions] = useState(null)
+  const [artOptions, setArtOptions] = useState([])
+  const [artOptionsLoading, setArtOptionsLoading] = useState(false)
   const [processedDeck, setProcessedDeck] = useState([])
   const [showAddForm, setShowAddForm] = useState(false)
   const [addForm, setAddForm] = useState({ name: '', frontUrl: '', backUrl: '', pileId: '', quantity: 1 })
   const [successMessage, setSuccessMessage] = useState()
   const [errorMessage, setErrorMessage] = useState()
   const [isLoading, setIsLoading] = useState(false)
+  
+  // Helper: Reset add form to initial state
+  const resetAddForm = () => setAddForm({ name: '', frontUrl: '', backUrl: '', pileId: '', quantity: 1 })
+  
+  // Helper: Close all side panels
+  const closeAllPanels = () => {
+    setShowAddForm(false);
+    setProcessingArtOptions(null);
+    setArtOptions([]);
+    setArtOptionsLoading(false);
+    setEditingCard(null);
+    resetAddForm();
+  }
+  
+  // Helper: Update deck state after modifications
+  const updateDeckState = (deckObj, successMsg) => {
+    const jsonStr = JSON.stringify(deckObj);
+    setDeckJson(jsonStr);
+    const processed = processDeckData(deckObj);
+    setProcessedDeck(processed);
+    if (successMsg) setSuccessMessage(successMsg);
+  }
   
   const downloadDeckJson = (jsonStr) => {
     const blob = new Blob([jsonStr], { type: 'application/json' });
@@ -142,16 +169,16 @@ export default function Magic() {
     )
   }
 
-  const successAlert = (
-    successMessage && (
-      <div className="alert alert-success" role="alert">{successMessage}</div>
+  const renderAlert = (message, type = 'success') => (
+    message && (
+      <div className={`alert alert-${type}`} role="alert">
+        {type === 'danger' ? 'Error: ' : ''}{message}
+      </div>
     )
   )
-  const errorAlert = (
-    errorMessage && (
-      <div className="alert alert-danger" role="alert">Error: {errorMessage}</div>
-    )
-  )
+  
+  const successAlert = renderAlert(successMessage, 'success')
+  const errorAlert = renderAlert(errorMessage, 'danger')
 
   const clearMessages = () => {
     setSuccessMessage(null)
@@ -231,11 +258,7 @@ export default function Magic() {
       }
       // Convert card data to TableTop format
       const deckObj = convertToTableTop(cardData);
-      const jsonStr = JSON.stringify(deckObj);
-      setDeckJson(jsonStr);
-      const processed = processDeckData(deckObj);
-      setProcessedDeck(processed);
-      setSuccessMessage('Deck loaded');
+      updateDeckState(deckObj, 'Deck loaded');
     } catch (err) {
       console.error('submit error', err);
       setErrorMessage('Failed to load deck');
@@ -260,7 +283,6 @@ export default function Magic() {
         const processed = processDeckData(parsed);
         setProcessedDeck(processed);
         setSuccessMessage(`Loaded deck from ${file.name}`);
-        setIsLoading(false);
       } catch (err) {
         console.error('file parse error', err);
         setErrorMessage('Failed to parse uploaded JSON');
@@ -296,30 +318,18 @@ export default function Magic() {
           moveCardBetweenPiles(deckObj, actualOrig, newPileIndex, cardId, name, frontUrl, backUrl);
         }
 
-        const updatedJson = JSON.stringify(deckObj);
-        setDeckJson(updatedJson);
-        const processed = processDeckData(deckObj);
-        setProcessedDeck(processed);
-        const pileTitle = PILE_TITLE_MAP[pileId] || (processed.find(p => p.id === pileId)?.title || pileId);
-        setSuccessMessage(`Updated "${name}" in ${pileTitle}`);
-        setEditingCard(null);
-        setShowAddForm(false);
-        setAddForm({ name: '', frontUrl: '', backUrl: '', pileId: '', quantity: 1 });
+        const pileTitle = PILE_TITLE_MAP[pileId] || pileId;
+        updateDeckState(deckObj, `Updated "${name}" in ${pileTitle}`);
+        closeAllPanels();
         return;
       }
 
       // Add new card
       const targetIndex = getOrCreatePileIndex(deckObj, pileId);
       addCardToPile(deckObj, targetIndex, name, frontUrl, backUrl, quantity || 1);
-      const updatedJson = JSON.stringify(deckObj);
-      setDeckJson(updatedJson);
-      const processed = processDeckData(deckObj);
-      setProcessedDeck(processed);
-      const pileTitle = PILE_TITLE_MAP[pileId] || (processed.find(p => p.id === pileId)?.title || pileId);
-      setSuccessMessage(`Added "${name}" to ${pileTitle}`);
-      setErrorMessage(null);
-      setShowAddForm(false);
-      setAddForm({ name: '', frontUrl: '', backUrl: '', pileId: '', quantity: 1 });
+      const pileTitle = PILE_TITLE_MAP[pileId] || pileId;
+      updateDeckState(deckObj, `Added "${name}" to ${pileTitle}`);
+      closeAllPanels();
     } catch (err) {
       console.error('Error modifying deck', err);
       setErrorMessage('Failed to modify deck');
@@ -362,7 +372,7 @@ export default function Magic() {
   }
 
   // Small presentational sub-component for a card row
-  function CardRow({ pile, card, onEdit, onDelete }) {
+  function CardRow({ pile, card, onEdit, onDelete, onArtOptions }) {
     return (
       <div className="card-item" style={{ marginBottom: '1rem' }}>
         <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -375,6 +385,7 @@ export default function Magic() {
           <span style={{ marginRight: '0.75rem' }}>{card.nickname}</span>
           <div>
             <button type="button" className="btn btn-sm btn-outline-secondary me-1" onClick={() => onEdit(pile.id, card)}>Edit</button>
+            <button type="button" className="btn btn-sm btn-outline-primary me-1" onClick={() => onArtOptions(pile.id, card)}>Art Options</button>
             <button type="button" className="btn btn-sm btn-outline-danger" onClick={() => onDelete(pile.id, card)}>Remove</button>
           </div>
         </div>
@@ -423,6 +434,11 @@ export default function Magic() {
   function handleToggleAddForm() {
     // Clear messages
     clearMessages();
+    // Close art options if open
+    setProcessingArtOptions(null);
+    setArtOptions([]);
+    setArtOptionsLoading(false);
+    
     // If the form is closed, open it and reset to Add mode.
     if (!showAddForm) {
       setEditingCard(null);
@@ -436,11 +452,16 @@ export default function Magic() {
     setAddForm({ name: '', frontUrl: '', backUrl: '', pileId: processedDeck.length ? processedDeck[0].id : '', quantity: 1 });
   }
   function handleEditCard(pileId, card) {
-    // populate form and enter edit mode
+    clearMessages();
+    // Close art options if open
+    setProcessingArtOptions(null);
+    setArtOptions([]);
+    setArtOptionsLoading(false);
+    
+    // Populate form and enter edit mode
     setAddForm({ name: card.nickname || '', frontUrl: card.frontLarge || '', backUrl: card.backLarge || '', pileId });
     setEditingCard({ pileId, cardId: card.cardID });
     setShowAddForm(true);
-    setErrorMessage(null);
   }
 
   function handleDeleteCard(pileId, card) {
@@ -461,14 +482,101 @@ export default function Magic() {
         removeCardFromPile(deckObj, pileIndex, card.cardID);
       }
 
-      const updatedJson = JSON.stringify(deckObj);
-      setDeckJson(updatedJson);
-      const processed = processDeckData(deckObj);
-      setProcessedDeck(processed);
-      setSuccessMessage(`Removed "${card.nickname}"`);
+      updateDeckState(deckObj, `Removed "${card.nickname}"`);
     } catch (err) {
       console.error('delete error', err);
       setErrorMessage('Failed to delete card');
+    }
+  }
+
+  async function handleArtOptions(pileId, card) {
+    clearMessages();
+    // Close add form if open
+    setShowAddForm(false);
+    resetAddForm();
+    
+    setProcessingArtOptions({ pileId, card });
+    setArtOptionsLoading(true);
+    try {
+      const encodedName = encodeURIComponent(`!"${card.nickname}" include:extras`);
+      const res = await axios.get(`https://api.scryfall.com/cards/search?q=${encodedName}&unique=prints`);
+      const cards = res.data.data || [];
+      setArtOptions(cards);
+    } catch (err) {
+      console.error('art options error', err);
+      setErrorMessage('Failed to load art options');
+    } finally {
+      setArtOptionsLoading(false);
+    }
+  }
+
+  function handleSelectArt(cardOption) {
+    if (!processingArtOptions) return;
+    
+    const { pileId, card: originalCard } = processingArtOptions;
+    
+    try {
+      const deckObj = JSON.parse(deckJson);
+      const pileIndex = findPileIndexByProcessedId(deckObj, pileId);
+      
+      if (pileIndex === -1) {
+        setErrorMessage('Could not find pile');
+        return;
+      }
+      
+      const pile = deckObj.ObjectStates[pileIndex];
+      
+      // Extract image URLs from card option
+      let frontUrl = null;
+      let backUrl = null;
+      let isDoubleSided = false;
+      
+      if (cardOption.card_faces && cardOption.card_faces.length > 1) {
+        // Double-sided card
+        isDoubleSided = true;
+        frontUrl = cardOption.card_faces[0].image_uris?.large;
+        backUrl = cardOption.card_faces[1].image_uris?.large;
+      } else if (cardOption.image_uris) {
+        // Single-sided card
+        frontUrl = cardOption.image_uris.large;
+      }
+      
+      if (!frontUrl) {
+        setErrorMessage('Selected card has no image');
+        return;
+      }
+      
+      // Use the full card name from the API (which may include "Front // Back" for double-sided cards)
+      const cardName = cardOption.name;
+      
+      // Find the card in the pile by its CardID (unique identifier)
+      const containedObj = pile.ContainedObjects?.find(obj => obj.CardID === originalCard.cardID);
+      
+      if (!containedObj) {
+        setErrorMessage(`Could not locate card by ID ${originalCard.cardID} in pile`);
+        return;
+      }
+      
+      // Update CustomDeck entry
+      const slotKey = Math.floor(originalCard.cardID / 100).toString();
+      if (pile.CustomDeck && pile.CustomDeck[slotKey]) {
+        pile.CustomDeck[slotKey].FaceURL = frontUrl;
+        if (backUrl) {
+          pile.CustomDeck[slotKey].BackURL = backUrl;
+        }
+      }
+      
+      // Update ContainedObjects nickname with the full card name from the API
+      if (containedObj.Nickname !== cardName) {
+        containedObj.Nickname = cardName;
+      }
+      
+      updateDeckState(deckObj, `Updated art for "${cardName}"`);
+      setProcessingArtOptions(null);
+      setArtOptions([]);
+    } catch (err) {
+      console.error('select art error', err);
+      setErrorMessage('Failed to update card art');
     }
   }
 
@@ -486,21 +594,77 @@ export default function Magic() {
                   <h4>{pile.title}</h4>
                   <div className="card-list">
                     {pile.cards.map((card) => (
-                      <CardRow key={card.id} pile={pile} card={card} onEdit={handleEditCard} onDelete={handleDeleteCard} />
+                      <CardRow key={card.id} pile={pile} card={card} onEdit={handleEditCard} onDelete={handleDeleteCard} onArtOptions={handleArtOptions} />
                     ))}
                   </div>
                 </div>
               ))}
         </div>
 
-        <div style={{ width: 360, alignSelf: 'flex-start', position: 'sticky', top: '1rem', height: 'fit-content' }}>
+        <div style={{ width: 360, alignSelf: 'flex-start', position: 'sticky', top: '1rem', height: 'fit-content', maxHeight: '90vh', overflowY: 'auto' }}>
           <div style={{ marginBottom: '0.5rem' }}>
-            {showAddForm ? (
-              <button className="btn btn-secondary" onClick={() => { setShowAddForm(false); setEditingCard(null); setAddForm({ name: '', frontUrl: '', backUrl: '', pileId: '', quantity: 1 }); }}>Close</button>
+            {showAddForm || processingArtOptions ? (
+              <button className="btn btn-secondary" onClick={closeAllPanels}>Close</button>
             ) : null}
           </div>
 
           {errorMessage && <div className="alert alert-danger">{errorMessage}</div>}
+
+          {processingArtOptions && (
+            <div className="card p-3">
+              <h5 style={{ marginBottom: '1rem' }}>Art Options for: {processingArtOptions.card.nickname}</h5>
+              
+              {artOptionsLoading ? (
+                <div className="text-center" style={{ padding: '2rem' }}>
+                  <div className="spinner-border spinner-border-sm" role="status">
+                    <span className="visually-hidden">Loading...</span>
+                  </div>
+                  <p>Loading art options...</p>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem' }}>
+                  {artOptions.length === 0 ? (
+                    <p className="text-muted">No alt art found</p>
+                  ) : (
+                    artOptions.map((cardOption, idx) => {
+                      let imageUrl = null;
+                      
+                      // Get the image URL
+                      if (cardOption.image_uris?.normal) {
+                        imageUrl = cardOption.image_uris.normal;
+                      } else if (cardOption.card_faces?.[0]?.image_uris?.normal) {
+                        imageUrl = cardOption.card_faces[0].image_uris.normal;
+                      }
+                      
+                      return (
+                        <div
+                          key={idx}
+                          style={{
+                            cursor: imageUrl ? 'pointer' : 'default',
+                            border: '1px solid #ccc',
+                            borderRadius: '4px',
+                            overflow: 'hidden',
+                            transition: 'transform 0.2s'
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                          onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                          onClick={() => imageUrl && handleSelectArt(cardOption)}
+                        >
+                          {imageUrl ? (
+                            <img src={imageUrl} alt={cardOption.name} style={{ width: '100%', height: 'auto', display: 'block' }} />
+                          ) : (
+                            <div style={{ width: '100%', height: '100px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f5f5f5' }}>
+                              <span className="text-muted" style={{ fontSize: '0.75rem' }}>No image</span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {showAddForm && (
             <form onSubmit={handleFormSubmit} className="card p-3">
@@ -524,12 +688,12 @@ export default function Magic() {
                   <div className="mb-2">
                     <label className="form-label">Basic Land</label>
                     <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                      <img src="/mtg/forest.svg" alt="Forest" title="Forest" style={LAND_ICON_STYLE} onClick={() => { handleAddFormChange('frontUrl', FOREST_URL); handleAddFormChange('name', 'Forest'); }} />
-                      <img src="/mtg/island.svg" alt="Island" title="Island" style={LAND_ICON_STYLE} onClick={() => { handleAddFormChange('frontUrl', ISLAND_URL); handleAddFormChange('name', 'Island'); }} />
-                      <img src="/mtg/swamp.svg" alt="Swamp" title="Swamp" style={LAND_ICON_STYLE} onClick={() => { handleAddFormChange('frontUrl', SWAMP_URL); handleAddFormChange('name', 'Swamp'); }} />
-                      <img src="/mtg/mountain.svg" alt="Mountain" title="Mountain" style={LAND_ICON_STYLE} onClick={() => { handleAddFormChange('frontUrl', MOUNTAIN_URL); handleAddFormChange('name', 'Mountain'); }} />
-                      <img src="/mtg/plains.svg" alt="Plains" title="Plains" style={LAND_ICON_STYLE} onClick={() => { handleAddFormChange('frontUrl', PLAINS_URL); handleAddFormChange('name', 'Plains'); }} />
-                      <img src="/mtg/wastes.svg" alt="Wastes" title="Wastes" style={LAND_ICON_STYLE} onClick={() => { handleAddFormChange('frontUrl', WASTES_URL); handleAddFormChange('name', 'Wastes'); }} />
+                      <img src="/mtg/forest.svg" alt="Forest" title="Forest" style={LAND_ICON_STYLE} onClick={() => { handleAddFormChange('frontUrl', BASIC_LANDS.forest); handleAddFormChange('name', 'Forest'); }} />
+                      <img src="/mtg/island.svg" alt="Island" title="Island" style={LAND_ICON_STYLE} onClick={() => { handleAddFormChange('frontUrl', BASIC_LANDS.island); handleAddFormChange('name', 'Island'); }} />
+                      <img src="/mtg/swamp.svg" alt="Swamp" title="Swamp" style={LAND_ICON_STYLE} onClick={() => { handleAddFormChange('frontUrl', BASIC_LANDS.swamp); handleAddFormChange('name', 'Swamp'); }} />
+                      <img src="/mtg/mountain.svg" alt="Mountain" title="Mountain" style={LAND_ICON_STYLE} onClick={() => { handleAddFormChange('frontUrl', BASIC_LANDS.mountain); handleAddFormChange('name', 'Mountain'); }} />
+                      <img src="/mtg/plains.svg" alt="Plains" title="Plains" style={LAND_ICON_STYLE} onClick={() => { handleAddFormChange('frontUrl', BASIC_LANDS.plains); handleAddFormChange('name', 'Plains'); }} />
+                      <img src="/mtg/wastes.svg" alt="Wastes" title="Wastes" style={LAND_ICON_STYLE} onClick={() => { handleAddFormChange('frontUrl', BASIC_LANDS.wastes); handleAddFormChange('name', 'Wastes'); }} />
                     </div>
                   </div>
                   <div className="mb-2">
