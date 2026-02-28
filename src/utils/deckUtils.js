@@ -165,6 +165,11 @@ export function computeNewCardId(deckObj) {
   return { newCardID, newSlot };
 }
 
+// Helper: Find pile index by name (checks both Description and Nickname)
+function findPileByName(deckObj, pileName) {
+  return deckObj.ObjectStates.findIndex(p => p && ((p.Description === pileName) || (p.Nickname === pileName)));
+}
+
 function ensureCustomDeckEntry(pile, slot, face, back) {
   if (!pile.CustomDeck) pile.CustomDeck = {};
   pile.CustomDeck[String(slot)] = {
@@ -222,7 +227,7 @@ export function addCardToPile(deckObj, pileIndex, name, frontUrl, backUrl, quant
 
     // Add single double-sided card to "Double-sided Cards"
     const { newCardID: newCardID2, newSlot: newSlot2 } = computeNewCardId(deckObj);
-    let doubleIdx = deckObj.ObjectStates.findIndex(p => p && ((p.Description === 'Double-sided Cards') || (p.Nickname === 'Double-sided Cards')));
+    let doubleIdx = findPileByName(deckObj, 'Double-sided Cards');
     if (doubleIdx === -1) {
       const created = createDeckCustomPile(
         'Double-sided Cards',
@@ -435,10 +440,13 @@ export function convertToTableTop(deckData) {
     }
   });
 
-  const createCustomDeckEntry = (card, id, useBack = false) => ({
+  // Helper to check if a card is double-sided (has both front and back URLs)
+  const isDoubleSided = (card) => card.back && card.back !== DEFAULT_BACK;
+
+  const createCustomDeckEntry = (card, id) => ({
     [id]: {
       FaceURL: card.front,
-      BackURL: useBack ? card.back : DEFAULT_BACK,
+      BackURL: isDoubleSided(card) ? card.back : DEFAULT_BACK,
       NumHeight: 1,
       NumWidth: 1,
       BackIsHidden: true
@@ -459,7 +467,7 @@ export function convertToTableTop(deckData) {
     };
   };
 
-  const createPile = (cards, pileNumber, pileName, options = { faceUp: false, useBack: false }) => {
+  const createPile = (cards, pileNumber, pileName, faceUp = false) => {
     const customDeck = {};
     const containedObjects = [];
 
@@ -469,7 +477,7 @@ export function convertToTableTop(deckData) {
       const cardCount = card.quantity || 1;
 
       for (let j = 0; j < cardCount; j++) {
-        Object.assign(customDeck, createCustomDeckEntry(card, i, options.useBack));
+        Object.assign(customDeck, createCustomDeckEntry(card, i));
         containedObjects.push(createContainedObjectsEntry(card, 100 * i));
         i++;
       }
@@ -477,7 +485,7 @@ export function convertToTableTop(deckData) {
 
     const deckIDs = containedObjects.map(obj => obj.CardID);
 
-    const transform = createTransform(pileNumber, options.faceUp);
+    const transform = createTransform(pileNumber, faceUp);
 
     return {
       Name: "DeckCustom",
@@ -490,8 +498,8 @@ export function convertToTableTop(deckData) {
     };
   };
 
-  const createSingleCardPile = (card, pileNumber, pileName, options = { useBack: false }) => {
-    const customDeck = createCustomDeckEntry(card, 1, options.useBack);
+  const createSingleCardPile = (card, pileNumber, pileName) => {
+    const customDeck = createCustomDeckEntry(card, 1);
 
     return {
       Name: "Card",
@@ -503,26 +511,35 @@ export function convertToTableTop(deckData) {
     };
   };
 
-  deck.ObjectStates.push(createPile(deckData.mainBoard, pileNumber++, "Mainboard"));
+  // Separate mainboard into regular and double-sided cards
+  const mainBoardRegular = deckData.mainBoard?.filter(card => !isDoubleSided(card)) || [];
+  const mainBoardDouble = deckData.mainBoard?.filter(card => isDoubleSided(card)) || [];
+
+  // Add mainboard pile if there are regular cards
+  if (mainBoardRegular.length > 0) {
+    deck.ObjectStates.push(createPile(mainBoardRegular, pileNumber++, "Mainboard", false));
+  }
+
+  // Add double-sided pile if there are double-sided cards (face up)
+  if (mainBoardDouble.length > 0) {
+    deck.ObjectStates.push(createPile(mainBoardDouble, pileNumber++, "Double-sided Cards", true));
+  }
 
   // Commanders: `deckData.commanders` is an array (may be empty)
   if (deckData.commanders && Array.isArray(deckData.commanders) && deckData.commanders.length) {
     if (deckData.commanders.length === 1) {
-      const useBack = deckData.commanders[0].back !== undefined;
-      deck.ObjectStates.push(createSingleCardPile(deckData.commanders[0], pileNumber++, "Commander", { useBack }));
+      deck.ObjectStates.push(createSingleCardPile(deckData.commanders[0], pileNumber++, "Commander"));
     } else {
       // Group multiple commanders into a single pile named "Commander"
-      // If any commander has a back image, set useBack so backs are used where available
-      const anyHasBack = deckData.commanders.some(c => c.back !== undefined);
-      deck.ObjectStates.push(createPile(deckData.commanders, pileNumber++, "Commander", { faceUp: true, useBack: anyHasBack }));
+      deck.ObjectStates.push(createPile(deckData.commanders, pileNumber++, "Commander", true));
     }
   }
 
-  // Tokens: if only one token, use single card pipe, otherwise a pile
+  // Tokens: if only one token, use single card pile, otherwise a pile (face up)
   if (deckData.tokens && Array.isArray(deckData.tokens) && deckData.tokens.length === 1) {
-    deck.ObjectStates.push(createSingleCardPile(deckData.tokens[0], pileNumber++, "Tokens", { useBack: true }));
+    deck.ObjectStates.push(createSingleCardPile(deckData.tokens[0], pileNumber++, "Tokens"));
   } else {
-    deck.ObjectStates.push(createPile(deckData.tokens || [], pileNumber++, "Tokens", { faceUp: true, useBack: true }));
+    deck.ObjectStates.push(createPile(deckData.tokens || [], pileNumber++, "Tokens", true));
   }
 
   return deck;
