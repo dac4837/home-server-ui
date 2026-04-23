@@ -1,4 +1,4 @@
-import { use, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMsal, MsalAuthenticationTemplate, useAccount } from '@azure/msal-react';
 import { loginRequest, getMsalInstance } from '../authConfig';
 import { InteractionType } from '@azure/msal-browser';
