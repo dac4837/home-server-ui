@@ -43,7 +43,7 @@ function Upload() {
     clearMessages()
     setLoading(true)
     event.preventDefault()
-    const url = '/uploadfile';
+    const url = '/api/uploadfile';
     const formData = new FormData();
     formData.append('file', file);
     formData.append('fileName', file.name);
