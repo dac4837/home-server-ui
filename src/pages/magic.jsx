@@ -529,11 +529,8 @@ export default function Magic() {
       // Extract image URLs from card option
       let frontUrl = null;
       let backUrl = null;
-      let isDoubleSided = false;
-      
+
       if (cardOption.card_faces && cardOption.card_faces.length > 1) {
-        // Double-sided card
-        isDoubleSided = true;
         frontUrl = cardOption.card_faces[0].image_uris?.large;
         backUrl = cardOption.card_faces[1].image_uris?.large;
       } else if (cardOption.image_uris) {
