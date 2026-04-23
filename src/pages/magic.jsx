@@ -126,7 +126,7 @@ export default function Magic() {
         const formData = new FormData();
         photos.forEach((f) => formData.append('photo', f));
 
-        const res = await axios.post('/magic-deck-json-from-photo', formData, {
+        const res = await axios.post('/api/magic-deck-json-from-photo', formData, {
           headers: { 'Content-Type': 'multipart/form-data' }
         });
 
@@ -253,7 +253,7 @@ export default function Magic() {
         const res = await fetch('/deck-response.json');
         cardData = await res.json();
       } else {
-        const res = await axios.get('/magic-cards-json', { params: { deckUrl } });
+        const res = await axios.get('/api/magic-cards-json', { params: { deckUrl } });
         cardData = res.data;
       }
       // Convert card data to TableTop format

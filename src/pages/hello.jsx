@@ -34,7 +34,7 @@ export default function Hello() {
   }
 
   const onSubmit = () => {
-    axios.post('/hijames', {name, message})
+    axios.post('/api/hijames', {name, message})
       .then(function (response) {
         clearMessages()
         setSuccessful(true)
