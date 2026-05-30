@@ -22,74 +22,56 @@ const FileTreeItem = ({ item, onDownload, isDownloading }) => {
   };
 
   return (
-    <div style={{ margin: '0', padding: '0' }}>
-      <div
-        style={{
-          padding: '10px',
-          margin: '4px 0',
-          border: '1px solid #ddd',
-          borderRadius: '4px',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          backgroundColor: isFolder ? '#f9f9f9' : '#fff',
-          paddingLeft: `${(item.level || 0) * 20}px`
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
-          {isFolder && (
-            <button
-              onClick={handleToggle}
-              style={{
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                padding: '0',
-                width: '20px',
-                fontSize: '12px'
-              }}
-            >
-              {expanded ? '▼' : '▶'}
-            </button>
-          )}
-          {isFolder && <span style={{ fontWeight: 'bold' }}>📁</span>}
-          {!isFolder && <span>📄</span>}
-          <span>{item.name}</span>
-        </div>
-        {!isFolder && (
-          <button
-            onClick={handleDownload}
-            disabled={isCurrentlyDownloading}
-            style={{
-              padding: '8px 16px',
-              backgroundColor: isCurrentlyDownloading ? '#ccc' : '#007bff',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: isCurrentlyDownloading ? 'default' : 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}
-          >
-            {isCurrentlyDownloading ? (
-              <>
-                <span style={{ 
-                  display: 'inline-block',
-                  width: '14px',
-                  height: '14px',
-                  border: '2px solid #fff',
-                  borderTop: '2px solid transparent',
-                  borderRadius: '50%',
-                  animation: 'spin 0.6s linear infinite'
-                }}></span>
-                Downloading...
-              </>
-            ) : (
-              'Download'
+    <div style={{ marginLeft: `${(item.level || 0) * 20}px` }}>
+      <div className="card mb-2">
+        <div className="card-body p-2 p-md-3">
+          <div className="row g-2 align-items-start align-items-md-center">
+            <div className="col-auto">
+              {isFolder && (
+                <button
+                  onClick={handleToggle}
+                  className="btn btn-sm btn-link p-0"
+                  style={{ fontSize: '12px' }}
+                >
+                  {expanded ? '▼' : '▶'}
+                </button>
+              )}
+            </div>
+            <div className="col-auto">
+              {isFolder && <span style={{ fontSize: '18px' }}>📁</span>}
+              {!isFolder && <span style={{ fontSize: '18px' }}>📄</span>}
+            </div>
+            <div className="col flex-grow-1 text-break">
+              <span>{item.name}</span>
+            </div>
+            {!isFolder && (
+              <div className="col-12 col-md-auto">
+                <button
+                  onClick={handleDownload}
+                  disabled={isCurrentlyDownloading}
+                  className="btn btn-primary w-100 w-md-auto"
+                  style={{
+                    opacity: isCurrentlyDownloading ? 0.6 : 1,
+                    cursor: isCurrentlyDownloading ? 'default' : 'pointer'
+                  }}
+                >
+                  {isCurrentlyDownloading ? (
+                    <>
+                      <span
+                        className="spinner-border spinner-border-sm me-2"
+                        role="status"
+                        aria-hidden="true"
+                      ></span>
+                      Downloading...
+                    </>
+                  ) : (
+                    'Download'
+                  )}
+                </button>
+              </div>
             )}
-          </button>
-        )}
+          </div>
+        </div>
       </div>
       {isFolder && expanded && item.children && item.children.length > 0 && (
         <div>
@@ -193,32 +175,31 @@ const Files = () => {
   };
 
   if (loading) {
-    return <div className="container" style={{ padding: '20px' }}>Loading files...</div>;
+    return (
+      <div className="container mt-5">
+        <div className="text-center">
+          <div className="spinner-border" role="status">
+            <span className="visually-hidden">Loading...</span>
+          </div>
+          <p className="mt-3">Loading files...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="container" style={{ padding: '20px' }}>
-      <style>{`
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
-      <h1>Files</h1>
+    <div className="container-fluid py-4 px-2 px-md-4">
+      <h1 className="mb-4">Files</h1>
       
       {error && (
-        <div style={{
-          padding: '10px',
-          backgroundColor: '#fee',
-          color: '#c33',
-          borderRadius: '4px',
-          marginBottom: '20px'
-        }}>
+        <div className="alert alert-danger alert-dismissible fade show" role="alert">
           {error}
+          <button type="button" className="btn-close" onClick={() => setError(null)}></button>
         </div>
       )}
 
       {fileTree.length === 0 ? (
-        <p>No files available.</p>
+        <p className="text-muted">No files available.</p>
       ) : (
         <div>
           {fileTree.map((item) => (
