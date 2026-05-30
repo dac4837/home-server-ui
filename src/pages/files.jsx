@@ -3,10 +3,11 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { getUserAccessToken } from '../authConfig';
 
-const FileTreeItem = ({ item, onDownload }) => {
+const FileTreeItem = ({ item, onDownload, isDownloading }) => {
   const [expanded, setExpanded] = useState(false);
 
   const isFolder = item.type === 'folder';
+  const isCurrentlyDownloading = isDownloading === item.path;
 
   const handleDownload = (e) => {
     e.stopPropagation();
@@ -58,16 +59,35 @@ const FileTreeItem = ({ item, onDownload }) => {
         {!isFolder && (
           <button
             onClick={handleDownload}
+            disabled={isCurrentlyDownloading}
             style={{
               padding: '8px 16px',
-              backgroundColor: '#007bff',
+              backgroundColor: isCurrentlyDownloading ? '#ccc' : '#007bff',
               color: 'white',
               border: 'none',
               borderRadius: '4px',
-              cursor: 'pointer'
+              cursor: isCurrentlyDownloading ? 'default' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
             }}
           >
-            Download
+            {isCurrentlyDownloading ? (
+              <>
+                <span style={{ 
+                  display: 'inline-block',
+                  width: '14px',
+                  height: '14px',
+                  border: '2px solid #fff',
+                  borderTop: '2px solid transparent',
+                  borderRadius: '50%',
+                  animation: 'spin 0.6s linear infinite'
+                }}></span>
+                Downloading...
+              </>
+            ) : (
+              'Download'
+            )}
           </button>
         )}
       </div>
@@ -78,6 +98,7 @@ const FileTreeItem = ({ item, onDownload }) => {
               key={child.path}
               item={{ ...child, level: (item.level || 0) + 1 }}
               onDownload={onDownload}
+              isDownloading={isDownloading}
             />
           ))}
         </div>
@@ -90,6 +111,7 @@ const Files = () => {
   const [fileTree, setFileTree] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [downloadingFile, setDownloadingFile] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -132,6 +154,7 @@ const Files = () => {
 
   const downloadFile = async (filePath, fileName) => {
     try {
+      setDownloadingFile(filePath);
       const token = await getUserAccessToken();
 
       // Download file
@@ -154,8 +177,10 @@ const Files = () => {
       link.click();
       link.parentElement.removeChild(link);
       window.URL.revokeObjectURL(url);
+      setDownloadingFile(null);
     } catch (err) {
       console.error('Error downloading file:', err);
+      setDownloadingFile(null);
       
       // Redirect to logout if token acquisition failed or backend returned 401
       if (err.message?.includes('Error getting auth session') || err.response?.status === 401) {
@@ -173,6 +198,11 @@ const Files = () => {
 
   return (
     <div className="container" style={{ padding: '20px' }}>
+      <style>{`
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
       <h1>Files</h1>
       
       {error && (
@@ -196,6 +226,7 @@ const Files = () => {
               key={item.path}
               item={item}
               onDownload={downloadFile}
+              isDownloading={downloadingFile}
             />
           ))}
         </div>
