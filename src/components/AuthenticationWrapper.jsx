@@ -7,7 +7,9 @@ import LoadingSpinner from './LoadingSpinner';
 const ErrorMessage = ({ error }) => (
   <div style={{ color: 'red' }}>
     <h2>Authentication Error</h2>
-    <p>{JSON.stringify(error)}</p>
+    <p>
+      Try <a href="/logout" style={{ color: 'red', textDecoration: 'underline' }}>logging out</a> and trying again. If this is your first time here, contact the site admin for access.
+    </p>
   </div>
 );
 
