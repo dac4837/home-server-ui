@@ -118,6 +118,12 @@ const Files = () => {
       } catch (err) {
         console.error('Error fetching files:', err);
         
+        // Check for 403 (Forbidden) error
+        if (err.response?.status === 403) {
+          setError('If this is your first time here, contact the site admin for access.');
+          return;
+        }
+        
         // Redirect to logout if token acquisition failed or backend returned 401
         if (err.message?.includes('Error getting auth session') || err.response?.status === 401) {
           navigate('/logout?expired=true');
@@ -163,6 +169,12 @@ const Files = () => {
     } catch (err) {
       console.error('Error downloading file:', err);
       setDownloadingFile(null);
+      
+      // Check for 403 (Forbidden) error
+      if (err.response?.status === 403) {
+        setError('If this is your first time here, contact the site admin for access.');
+        return;
+      }
       
       // Redirect to logout if token acquisition failed or backend returned 401
       if (err.message?.includes('Error getting auth session') || err.response?.status === 401) {
