@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
 import { getUserAccessToken } from '../authConfig';
 
 const FileTreeItem = ({ item, onDownload }) => {
@@ -89,6 +90,7 @@ const Files = () => {
   const [fileTree, setFileTree] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchFiles = async () => {
@@ -111,6 +113,13 @@ const Files = () => {
         setFileTree(filesResponse.data);
       } catch (err) {
         console.error('Error fetching files:', err);
+        
+        // Redirect to logout if token acquisition failed or backend returned 401
+        if (err.message?.includes('Error getting auth session') || err.response?.status === 401) {
+          navigate('/logout?expired=true');
+          return;
+        }
+        
         const errorMsg = err.response?.data?.message || err.message || 'Failed to fetch files';
         setError(`Error: ${errorMsg}`);
       } finally {
@@ -119,7 +128,7 @@ const Files = () => {
     };
 
     fetchFiles();
-  }, []);
+  }, [navigate]);
 
   const downloadFile = async (filePath, fileName) => {
     try {
@@ -147,6 +156,13 @@ const Files = () => {
       window.URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Error downloading file:', err);
+      
+      // Redirect to logout if token acquisition failed or backend returned 401
+      if (err.message?.includes('Error getting auth session') || err.response?.status === 401) {
+        navigate('/logout?expired=true');
+        return;
+      }
+      
       setError('Failed to download file.');
     }
   };

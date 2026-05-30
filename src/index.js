@@ -15,6 +15,7 @@ import Home from "./pages/home";
 import Upload from "./pages/upload";
 import Magic from "./pages/magic";
 import Files from "./pages/files";
+import Logout from "./pages/logout";
 import AuthenticationWrapper from "./components/AuthenticationWrapper";
 import LoadingSpinner from "./components/LoadingSpinner";
 
@@ -25,6 +26,7 @@ const router = createBrowserRouter(
       <Route path="/upload" element={<Upload />} />
       <Route path="/magic" element={<Magic />} />
       <Route path="/auth_callback" element={<LoadingSpinner />} />
+      <Route path="/logout" element={<Logout />} />
       <Route path="/files" element={<AuthenticationWrapper><Files /></AuthenticationWrapper>} />
       <Route path="/" element={<Home />} />
     </>
